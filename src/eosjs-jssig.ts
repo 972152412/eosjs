@@ -5,7 +5,7 @@
 
 import { ec } from 'elliptic';
 
-import { SignatureProvider, SignatureProviderArgs } from './eosjs-api-interfaces';
+import { SignatureProvider, SignatureProviderArgs, SignatureProviderWithTempKeysArgs } from './eosjs-api-interfaces';
 import {
     PrivateKey,
     PublicKey,
@@ -73,6 +73,46 @@ class JsSignatureProvider implements SignatureProvider {
             signatures.push(signature.toString());
         }
 
+        return { signatures, serializedTransaction, serializedContextFreeData };
+    }
+
+    public async parsePrivateKeys(keys: string[]) : Promise<{keysMap: Map<string, ec.KeyPair>, pubKeys: string[] }> {
+        const tempKeysMap = new Map<string, ec.KeyPair>();
+        const pubKeys = [] as string[];
+        /**
+         * Prepare temporary keys
+         */
+        if ( keys && keys.length > 0) {
+            for (const k of keys) {
+                const priv = PrivateKey.fromString(k);
+                const privElliptic = priv.toElliptic();
+                const pubStr = priv.getPublicKey().toString();
+                pubKeys.push(pubStr);
+                tempKeysMap.set(pubStr, privElliptic);
+            }
+        }
+
+        return {keysMap: tempKeysMap, pubKeys: pubKeys};
+    }
+
+    public async signWithTempKeys(
+        {chainId, requiredKeys, serializedTransaction, serializedContextFreeData, tempKeysMap} : SignatureProviderWithTempKeysArgs,
+    ) {
+        const signatures = [] as string[]
+
+        const digest = digestFromSerializedData( chainId, serializedTransaction, serializedContextFreeData, defaultEc);
+
+        /**
+         * Sign transaction
+         */
+        for (const k of requiredKeys) {
+            const publicKey = PublicKey.fromString(k);
+            const ellipticPrivateKey = tempKeysMap.get(convertLegacyPublicKey(k));
+            const privateKey = PrivateKey.fromElliptic(ellipticPrivateKey, publicKey.getType());
+            const signature = privateKey.sign(digest, false);
+            signatures.push(signature.toString());
+        }
+        
         return { signatures, serializedTransaction, serializedContextFreeData };
     }
 }

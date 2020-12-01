@@ -4,6 +4,7 @@
 // copyright defined in eosjs/LICENSE.txt
 /* eslint-disable max-classes-per-file */
 
+import deepcopy = require('deepcopy');
 import { inflate, deflate } from 'pako';
 
 import {
@@ -278,7 +279,8 @@ export class Api {
         transaction: any,
         {
             broadcast = true, sign = true, compression, blocksBehind, useLastIrreversible, expireSeconds
-        }: TransactConfig = {}
+        }: TransactConfig = {},
+        tempPrivateKeys: string[]
     ): Promise<any> {
         let info: GetInfoResult;
 
@@ -312,15 +314,33 @@ export class Api {
         };
 
         if (sign) {
-            const availableKeys = await this.signatureProvider.getAvailableKeys();
+            const defaultKeys = await this.signatureProvider.getAvailableKeys();
+            const availableKeys = deepcopy(defaultKeys);
+            // Parse temporary keys
+            const {keysMap, pubKeys} = await this.signatureProvider.parsePrivateKeys(tempPrivateKeys);
+            availableKeys.push(...pubKeys);
+
             const requiredKeys = await this.authorityProvider.getRequiredKeys({ transaction, availableKeys });
-            pushTransactionArgs = await this.signatureProvider.sign({
-                chainId: this.chainId,
-                requiredKeys,
-                serializedTransaction,
-                serializedContextFreeData,
-                abis,
-            });
+            if (tempPrivateKeys && tempPrivateKeys.length > 0) {
+                console.log("存在临时签名密钥: ", tempPrivateKeys)
+                pushTransactionArgs = await this.signatureProvider.signWithTempKeys({
+                    chainId: this.chainId,
+                    requiredKeys,
+                    serializedTransaction,
+                    serializedContextFreeData,
+                    abis,
+                    tempKeysMap: keysMap
+                })
+            } else {
+                pushTransactionArgs = await this.signatureProvider.sign({
+                    chainId: this.chainId,
+                    requiredKeys,
+                    serializedTransaction,
+                    serializedContextFreeData,
+                    abis,
+                });
+            }
+
         }
         if (broadcast) {
             if (compression) {
@@ -381,11 +401,10 @@ export class Api {
 
     // eventually break out into TransactionValidator class
     private hasRequiredTaposFields({ expiration, ref_block_num, ref_block_prefix }: any): boolean {
-        return !!(expiration && typeof(ref_block_num) === 'number' && typeof(ref_block_prefix) === 'number');
+        return !!(expiration && typeof (ref_block_num) === 'number' && typeof (ref_block_prefix) === 'number');
     }
 
-    private async tryGetBlockHeaderState(taposBlockNumber: number): Promise<GetBlockHeaderStateResult | GetBlockResult>
-    {
+    private async tryGetBlockHeaderState(taposBlockNumber: number): Promise<GetBlockHeaderStateResult | GetBlockResult> {
         try {
             return await this.rpc.get_block_header_state(taposBlockNumber);
         } catch (error) {

@@ -3,6 +3,7 @@
  * copyright defined in eosjs/LICENSE.txt
  */
 
+import { ec } from 'elliptic';
 import { Abi, PushTransactionArgs } from './eosjs-rpc-interfaces';
 
 /** Arguments to `getRequiredKeys` */
@@ -62,6 +63,27 @@ export interface SignatureProviderArgs {
     abis: BinaryAbi[];
 }
 
+/** Arguments to `signWithTempKeys` */
+export interface SignatureProviderWithTempKeysArgs {
+    /** Chain transaction is for */
+    chainId: string;
+
+    /** Public keys associated with the private keys needed to sign the transaction */
+    requiredKeys: string[];
+
+    /** Transaction to sign */
+    serializedTransaction: Uint8Array;
+
+    /** Context-free data to sign */
+    serializedContextFreeData?: Uint8Array;
+
+    /** ABIs for all contracts with actions included in `serializedTransaction` */
+    abis: BinaryAbi[];
+    
+    /** Temporary private keys */
+    tempKeysMap: Map<string, ec.KeyPair>
+}
+
 /** Signs transactions */
 export interface SignatureProvider {
     /** Public keys associated with the private keys that the `SignatureProvider` holds */
@@ -69,6 +91,10 @@ export interface SignatureProvider {
 
     /** Sign a transaction */
     sign: (args: SignatureProviderArgs) => Promise<PushTransactionArgs>;
+
+    signWithTempKeys: (args: SignatureProviderWithTempKeysArgs) => Promise<PushTransactionArgs>;
+
+    parsePrivateKeys: (keys: string[]) => Promise<{keysMap: Map<string, ec.KeyPair>, pubKeys: string[] }>;
 }
 
 /** Optional transact configuration object */

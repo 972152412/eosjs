@@ -3,13 +3,16 @@
  */
 // copyright defined in eosjs/LICENSE.txt
 
-import { SignatureProvider, SignatureProviderArgs } from './eosjs-api-interfaces';
+import { SignatureProvider, SignatureProviderArgs, SignatureProviderWithTempKeysArgs } from './eosjs-api-interfaces';
 import * as ser from './eosjs-serialize';
 import * as numeric from './eosjs-numeric';
 import { ec } from 'elliptic';
+import { PushTransactionArgs } from './eosjs-rpc-interfaces';
 
 /** Signs transactions using WebAuthn */
 export class WebAuthnSignatureProvider implements SignatureProvider {
+    signWithTempKeys: (args: SignatureProviderWithTempKeysArgs) => Promise<PushTransactionArgs>;
+    parsePrivateKeys: (keys: string[]) => Promise<{ keysMap: Map<string, ec.KeyPair>; pubKeys: string[]; }>;
     /** Map public key to credential ID (hex). User must populate this. */
     public keys = new Map<string, string>();
 
